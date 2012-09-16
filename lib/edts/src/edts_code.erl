@@ -64,7 +64,7 @@ check_module(Module, Checks) ->
 do_check_module(Mod0, File, undefined_function_calls) ->
   QueryFmt = "(XLin) ((XC - UC) || (XU - X - B) * XC | ~p : Mod)",
   QueryStr = lists:flatten(io_lib:format(QueryFmt, [Mod0])),
-  {ok, Res} = xref:q(edts_code, QueryStr),
+  {ok, Res} = edts_xref:q(edts_code, QueryStr),
   FmtFun = fun({{{Mod, _, _}, {CM, CF, CA}}, [Line]}) when Mod =:= Mod0 ->
                Desc = io_lib:format("Call to undefined function ~p:~p/~p",
                                     [CM, CF, CA]),
@@ -75,7 +75,7 @@ do_check_module(Mod, File, unused_exports) ->
   QueryFmt  = "(Lin) ((X - XU) * (~p : Mod * X))",
   QueryStr  = lists:flatten(io_lib:format(QueryFmt, [Mod])),
   Ignores   = sets:from_list(get_xref_ignores(Mod)),
-  {ok, Res} = xref:q(edts_code, QueryStr),
+  {ok, Res} = edts_xref:q(edts_code, QueryStr),
   FmtFun = fun({{M, F, A}, Line}, Acc) ->
                case sets:is_element({F, A}, Ignores) orelse
                     ignored_test_fun_p(M, F, A) of
@@ -129,10 +129,10 @@ compile_and_load(File, Options0) ->
       OutFile = filename:join(Out, atom_to_list(Mod)),
       {module, Mod} = code:load_abs(OutFile),
       spawn(fun() ->
-                case xref:replace_module(?SERVER, Mod, OutFile) of
+                case edts_xref:replace_module(?SERVER, Mod, OutFile) of
                   {ok, Mod} -> ok;
                   {error, xref_base, {no_such_module, Mod}} ->
-                    xref:add_module(?SERVER, OutFile)
+                    edts_xref:add_module(?SERVER, OutFile)
                 end,
                 update()
             end),
@@ -266,7 +266,7 @@ modules_at_path(Path) ->
 -spec start() -> {ok, node()}.
 %%------------------------------------------------------------------------------
 start() ->
-  case xref:start(?SERVER) of
+  case edts_xref:start(?SERVER) of
     {ok, _Pid}                       -> init();
     {error, {already_started, _Pid}} -> ok
   end,
@@ -282,7 +282,7 @@ start() ->
 stop() ->
   case whereis(?SERVER) of
     undefined -> {error, not_started};
-    _Pid      -> xref:stop(?SERVER)
+    _Pid      -> edts_xref:stop(?SERVER)
   end.
 
 %%------------------------------------------------------------------------------
@@ -294,7 +294,7 @@ stop() ->
 %%------------------------------------------------------------------------------
 who_calls(M, F, A) ->
   Str = lists:flatten(io_lib:format("(E || ~p)", [{M, F, A}])),
-  {ok, Calls} = xref:q(edts_code, Str),
+  {ok, Calls} = edts_xref:q(edts_code, Str),
   [Caller || {Caller, _Callee} <- Calls].
 
 %%%_* Internal functions =======================================================
@@ -356,15 +356,15 @@ get_include_dirs() ->
 -spec init() -> ok.
 %%------------------------------------------------------------------------------
 init() ->
-  ok = xref:set_default(?SERVER, [{verbose,false}, {warnings,false}]),
+  ok = edts_xref:set_default(?SERVER, [{verbose,false}, {warnings,false}]),
   Paths = [Path || Path <- code:get_path(), filelib:is_dir(Path)],
-  ok = xref:set_library_path(?SERVER, Paths),
+  ok = edts_xref:set_library_path(?SERVER, Paths),
   lists:foreach(fun(D) ->
-                    case xref:add_application(?SERVER, filename:dirname(D)) of
+                    case edts_xref:add_application(?SERVER, filename:dirname(D)) of
                       {error, _, _} ->
                         case filelib:is_dir(D) of
                           true  ->
-                            xref:add_directory(?SERVER, D);
+                            edts_xref:add_directory(?SERVER, D);
                           false -> ok
                         end;
                       {ok, _}       -> ok
@@ -393,8 +393,8 @@ reload_module(M) ->
 -spec update() -> ok.
 %%------------------------------------------------------------------------------
 update() ->
-  {ok, _Modules} = xref:update(?SERVER),
-  xref:q(?SERVER, "E"),
+  {ok, _Modules} = edts_xref:update(?SERVER),
+  edts_xref:q(?SERVER, "E"),
   modules(),
   ok.
 
